@@ -14,6 +14,12 @@
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
 
+// For LED stuff
+#include <Adafruit_GFX.h>
+#include "Adafruit_LEDBackpack.h"
+Adafruit_8x16minimatrix matrix = Adafruit_8x16minimatrix();
+
+
 #define BUTTON_A 0
 #define BUTTON_B 16
 #define BUTTON_C 2
@@ -38,30 +44,50 @@ String scroll_text = "";
 inline int max(int a,int b) {return ((a)>(b)?(a):(b)); }
 inline int min(int a,int b) {return ((a)<(b)?(a):(b)); }
 
+int screen_width = 128;
 int char_width = 0;
+int char_height = 0;
 int scroll_text_width = 0;
-int x_scroll_pos = 128;
+int x_scroll_pos = screen_width;
+
+const int led_disp_width = 16;
+const int led_char_width = 6;
+int led_scroll_pos = led_disp_width;
 
 
 void setup() {  
   Serial.begin(115200);
 
+  // Setup buttons
   pinMode(BUTTON_A, INPUT_PULLUP);
   pinMode(BUTTON_B, INPUT_PULLUP);
   pinMode(BUTTON_C, INPUT_PULLUP);
 
+  //Setup LED
+  matrix.begin(0x70);
+  matrix.clear();
+  matrix.setTextSize(1);
+  matrix.setTextWrap(false);
+  matrix.setTextColor(LED_ON);
+  matrix.setRotation(1);
+  matrix.writeDisplay();
+  matrix.setBrightness(5);
+
+  //Setup OLED
   u8g2.begin();
-  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.setFont(u8g2_font_6x10_tf);
+  char_height = 9;
   char_width = u8g2.getStrWidth("A") + 1;
  
+  //Setup WIFI
   WiFi.begin(ssid, password);
   
   int dots = 1;
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(100);
     u8g2.firstPage();
     do {
-      u8g2.setCursor(0, 6);
+      u8g2.setCursor(0, char_height);
       u8g2.print("Connecting to ");      
       u8g2.print(ssid);
       
@@ -73,12 +99,13 @@ void setup() {
 
   u8g2.firstPage();
   do {
-    u8g2.setCursor(0, 6);
+    u8g2.setCursor(0, char_height);
     u8g2.print("Connected as ");
     u8g2.print(WiFi.localIP());
   } while ( u8g2.nextPage() );
 
   read_data();
+  delay(500);
 }
 
 void read_data() {  
@@ -135,18 +162,32 @@ void read_data() {
 }
 
 void display_data() {
-  int chars_to_draw = (min(128, 128 - x_scroll_pos) / char_width) + 1;
+  int chars_to_draw = (min(screen_width, screen_width - x_scroll_pos) / char_width) + 1;
 
-  u8g2.setCursor(0, 6);
+  u8g2.setCursor(0, char_height);
   u8g2.print(top_dest);
-  u8g2.setCursor(128 - u8g2.getStrWidth(top_time.c_str()), 6);
+  u8g2.setCursor(screen_width - u8g2.getStrWidth(top_time.c_str()), char_height);
   u8g2.print(top_time);
   
   int start_char = max(0, -x_scroll_pos / char_width);
   int pos = max(x_scroll_pos, x_scroll_pos + (start_char * char_width));
 
-  u8g2.setCursor(pos, 12);
+  u8g2.setCursor(pos, char_height * 2);
   u8g2.print(scroll_text.substring(start_char, start_char + chars_to_draw));  
+}
+
+void display_leds() {
+  String led_text = top_dest + " " + top_time;
+  int width = led_text.length() * led_char_width;
+  matrix.clear();
+  matrix.setCursor(led_scroll_pos, 0);
+  matrix.print(led_text);
+  matrix.writeDisplay();
+
+  led_scroll_pos--;
+  if (led_scroll_pos < -width) {
+    led_scroll_pos = led_disp_width;
+  }
 }
 
 boolean scrolled_to_end() {
@@ -160,7 +201,7 @@ void loop() {
 
   if (scrolled_to_end() && millis() > last_read + read_interval) {
     read_data();
-    x_scroll_pos = 128;
+    x_scroll_pos = screen_width;
   } 
   
   u8g2.firstPage();
@@ -168,6 +209,7 @@ void loop() {
     display_data();
   } while ( u8g2.nextPage() );
 
+  display_leds();
   x_scroll_pos--;
   delay(1);
 }
