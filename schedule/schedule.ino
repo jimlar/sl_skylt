@@ -34,7 +34,7 @@ String base_url = "http://sl.se/api/sv/RealTime/GetDepartures/";
 String metro_station = "9163"; // 9163 == Bandhagen
 String stop_point_number = "1661"; // 1661 == Bandhagen towards T-Centralen
 
-int read_interval = 15000; // Read SL data every 30 sec
+int read_interval = 30000; // Read SL data every 30 sec
 unsigned long last_read = -read_interval;
 
 String top_dest = "";
