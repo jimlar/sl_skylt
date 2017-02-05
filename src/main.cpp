@@ -19,17 +19,11 @@
 #include "Adafruit_LEDBackpack.h"
 Adafruit_8x16minimatrix matrix = Adafruit_8x16minimatrix();
 
-
-#define BUTTON_A 0
-#define BUTTON_B 16
-#define BUTTON_C 2
-#define LED      0
-
 // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
 //U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
 
-// Sweetpea + SSD1306
-U8G2_SSD1306_128X64_NONAME_1_SW_I2C u8g2(U8G2_R0, 14, 2, U8X8_PIN_NONE);
+// Sweetpea esp210 + SSD1306
+U8G2_SSD1306_128X64_NONAME_1_SW_I2C u8g2(U8G2_R0, 14, 2);
 
 //
 // Check data with: curl -s 'http://sl.se/api/sv/RealTime/GetDepartures/9163' | jq '.data.MetroGroups[].Departures[] | {time: .DisplayTime, stop: .StopPointNumber, dest: .Destination}'
@@ -114,11 +108,6 @@ void read_data() {
 void setup() {
   Serial.begin(115200);
 
-  // Setup buttons
-  pinMode(BUTTON_A, INPUT_PULLUP);
-  pinMode(BUTTON_B, INPUT_PULLUP);
-  pinMode(BUTTON_C, INPUT_PULLUP);
-
   //Setup LED
   matrix.begin(0x70);
   matrix.clear();
@@ -198,10 +187,6 @@ boolean scrolled_to_end() {
 }
 
 void loop() {
-  if (! digitalRead(BUTTON_A)) Serial.println("A");
-  if (! digitalRead(BUTTON_B)) Serial.println("B");
-  if (! digitalRead(BUTTON_C)) Serial.println("C");
-
   if (scrolled_to_end() && millis() > last_read + read_interval) {
     read_data();
     x_scroll_pos = screen_width;
