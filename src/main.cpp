@@ -1,11 +1,11 @@
-// wifi_settings.h should be a file containing the following: 
+// wifi_settings.h should be a file containing the following:
 //
 // const char* ssid     = "wifi ssid";
 // const char* password = "wifi passwd";
 //
 // See http://forum.arduino.cc/index.php?topic=37371.0 on where to put the file
 //
-#include <wifi_settings.h>
+#include <settings.h>
 
 #include <Wire.h>
 #include <SPI.h>
@@ -25,7 +25,11 @@ Adafruit_8x16minimatrix matrix = Adafruit_8x16minimatrix();
 #define BUTTON_C 2
 #define LED      0
 
-U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
+// Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
+//U8G2_SSD1306_128X32_UNIVISION_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
+
+// Sweetpea + SSD1306
+U8G2_SSD1306_128X64_NONAME_1_SW_I2C u8g2(U8G2_R0, 14, 2, U8X8_PIN_NONE);
 
 //
 // Check data with: curl -s 'http://sl.se/api/sv/RealTime/GetDepartures/9163' | jq '.data.MetroGroups[].Departures[] | {time: .DisplayTime, stop: .StopPointNumber, dest: .Destination}'
@@ -54,8 +58,60 @@ const int led_disp_width = 16;
 const int led_char_width = 6;
 int led_scroll_pos = led_disp_width;
 
+void read_data() {
+  Serial.println("Loading SL data...");
+  HTTPClient http;
+  http.begin(base_url + metro_station);
+  int httpCode = http.GET();
+  if(httpCode != HTTP_CODE_OK) {
+    Serial.printf("Bad response code %d\n", httpCode);
+    http.end();
+    return;
+  }
 
-void setup() {  
+  String payload = http.getString();
+  http.end();
+
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(payload);
+  if (!root.success()) {
+    Serial.println("Could not parse JSON");
+    return;
+  }
+
+  int groups = root["data"]["MetroGroups"].size();
+  boolean first = true;
+  scroll_text = "";
+
+  for (int i = 0; i < groups; i++) {
+    for (int j = 0; j < root["data"]["MetroGroups"][i]["Departures"].size(); j++) {
+      String stop_point = root["data"]["MetroGroups"][i]["Departures"][j]["StopPointNumber"];
+      String time = root["data"]["MetroGroups"][i]["Departures"][j]["DisplayTime"];
+      String dest = root["data"]["MetroGroups"][i]["Departures"][j]["Destination"];
+      dest.replace("Ä", "A");//"\xe4");
+      dest.replace("ä", "a");//"\xe4");
+      dest.replace("Å", "A");//"\xe4");
+      dest.replace("å", "a");//"\xe4");
+      dest.replace("Ö", "O");//"\xf6");
+      dest.replace("ö", "o");//"\xf6");
+
+      if (stop_point == stop_point_number) {
+        if (first) {
+          top_dest = dest;
+          top_time = time;
+          first = false;
+
+        } else {
+          scroll_text += dest + " " + time + "  ";
+        }
+      }
+    }
+  }
+  scroll_text_width = scroll_text.length() * char_width;
+  last_read = millis();
+}
+
+void setup() {
   Serial.begin(115200);
 
   // Setup buttons
@@ -78,19 +134,19 @@ void setup() {
   u8g2.setFont(u8g2_font_6x10_tf);
   char_height = 9;
   char_width = u8g2.getStrWidth("A") + 1;
- 
+
   //Setup WIFI
-  WiFi.begin(ssid, password);
-  
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
   int dots = 1;
   while (WiFi.status() != WL_CONNECTED) {
     delay(100);
     u8g2.firstPage();
     do {
       u8g2.setCursor(0, char_height);
-      u8g2.print("Connecting to ");      
-      u8g2.print(ssid);
-      
+      u8g2.print("Connecting to ");
+      u8g2.print(WIFI_SSID);
+
       for (int i = 0; i < dots; i++) {
         u8g2.print(".");
       }
@@ -108,59 +164,6 @@ void setup() {
   delay(500);
 }
 
-void read_data() {  
-  Serial.println("Loading SL data...");
-  HTTPClient http;
-  http.begin(base_url + metro_station);
-  int httpCode = http.GET();
-  if(httpCode != HTTP_CODE_OK) {
-    Serial.printf("Bad response code %d\n", httpCode);
-    http.end();
-    return;
-  }
-  
-  String payload = http.getString();
-  http.end();
-
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(payload);
-  if (!root.success()) {
-    Serial.println("Could not parse JSON");
-    return;
-  }
-  
-  int groups = root["data"]["MetroGroups"].size();
-  boolean first = true;
-  scroll_text = "";
-
-  for (int i = 0; i < groups; i++) {
-    for (int j = 0; j < root["data"]["MetroGroups"][i]["Departures"].size(); j++) {
-      String stop_point = root["data"]["MetroGroups"][i]["Departures"][j]["StopPointNumber"];
-      String time = root["data"]["MetroGroups"][i]["Departures"][j]["DisplayTime"];
-      String dest = root["data"]["MetroGroups"][i]["Departures"][j]["Destination"];
-      dest.replace("Ä", "A");//"\xe4");
-      dest.replace("ä", "a");//"\xe4");
-      dest.replace("Å", "A");//"\xe4");
-      dest.replace("å", "a");//"\xe4");
-      dest.replace("Ö", "O");//"\xf6");
-      dest.replace("ö", "o");//"\xf6");
-      
-      if (stop_point == stop_point_number) {
-        if (first) {
-          top_dest = dest;
-          top_time = time;
-          first = false;
-
-        } else {
-          scroll_text += dest + " " + time + "  ";
-        }
-      }
-    }
-  }
-  scroll_text_width = scroll_text.length() * char_width;
-  last_read = millis();
-}
-
 void display_data() {
   int chars_to_draw = (min(screen_width, screen_width - x_scroll_pos) / char_width) + 1;
 
@@ -168,12 +171,12 @@ void display_data() {
   u8g2.print(top_dest);
   u8g2.setCursor(screen_width - u8g2.getStrWidth(top_time.c_str()), char_height);
   u8g2.print(top_time);
-  
+
   int start_char = max(0, -x_scroll_pos / char_width);
   int pos = max(x_scroll_pos, x_scroll_pos + (start_char * char_width));
 
   u8g2.setCursor(pos, char_height * 2);
-  u8g2.print(scroll_text.substring(start_char, start_char + chars_to_draw));  
+  u8g2.print(scroll_text.substring(start_char, start_char + chars_to_draw));
 }
 
 void display_leds() {
@@ -202,8 +205,8 @@ void loop() {
   if (scrolled_to_end() && millis() > last_read + read_interval) {
     read_data();
     x_scroll_pos = screen_width;
-  } 
-  
+  }
+
   u8g2.firstPage();
   do {
     display_data();
@@ -213,6 +216,3 @@ void loop() {
   x_scroll_pos--;
   delay(1);
 }
-
-
-
