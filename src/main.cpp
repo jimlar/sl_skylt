@@ -1,12 +1,3 @@
-// wifi_settings.h should be a file containing the following:
-//
-// const char* ssid     = "wifi ssid";
-// const char* password = "wifi passwd";
-//
-// See http://forum.arduino.cc/index.php?topic=37371.0 on where to put the file
-//
-#include <settings.h>
-
 #include <Wire.h>
 #include <SPI.h>
 #include <U8g2lib.h>
@@ -17,6 +8,9 @@
 // For LED stuff
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
+
+#include <settings.h>
+
 Adafruit_8x16minimatrix matrix = Adafruit_8x16minimatrix();
 
 // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
@@ -105,6 +99,49 @@ void read_data() {
   last_read = millis();
 }
 
+boolean tryWifi(String ssid, String pw) {
+  WiFi.begin(ssid.c_str(), pw.c_str());
+  int dots = 0;
+  while (WiFi.status() != WL_CONNECTED) {
+    dots++;
+    if (dots > 10) {
+      return false;
+    }
+
+    u8g2.firstPage();
+    do {
+      u8g2.setCursor(0, char_height);
+      u8g2.print("Trying ");
+      u8g2.print(ssid);
+
+      for (int i = 0; i < dots; i++) {
+        u8g2.print(".");
+      }
+    } while ( u8g2.nextPage() );
+    delay(1000);
+  }
+  return true;
+}
+
+void setupWifi() {
+  size_t num_wifis = (sizeof wifis / sizeof wifis[0]);
+  int wifi_idx = 0;
+  while (true) {
+    if (tryWifi(wifis[wifi_idx][0], wifis[wifi_idx][1])) {
+      break;
+    }
+    wifi_idx = (wifi_idx + 1) % num_wifis;
+  }
+
+  u8g2.firstPage();
+  do {
+    u8g2.setCursor(0, char_height);
+    u8g2.print("Got ");
+    u8g2.print(WiFi.localIP());
+  } while ( u8g2.nextPage() );
+  delay(1000);
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -124,31 +161,7 @@ void setup() {
   char_height = 9;
   char_width = u8g2.getStrWidth("A") + 1;
 
-  //Setup WIFI
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  int dots = 1;
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-    u8g2.firstPage();
-    do {
-      u8g2.setCursor(0, char_height);
-      u8g2.print("Connecting to ");
-      u8g2.print(WIFI_SSID);
-
-      for (int i = 0; i < dots; i++) {
-        u8g2.print(".");
-      }
-    } while ( u8g2.nextPage() );
-  }
-
-  u8g2.firstPage();
-  do {
-    u8g2.setCursor(0, char_height);
-    u8g2.print("Connected as ");
-    u8g2.print(WiFi.localIP());
-  } while ( u8g2.nextPage() );
-
+  setupWifi();
   read_data();
   delay(500);
 }
